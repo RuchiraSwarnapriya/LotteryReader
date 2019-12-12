@@ -7,6 +7,8 @@ import android.app.ProgressDialog;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
+import android.os.StrictMode;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.View;
@@ -18,6 +20,10 @@ import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 import com.google.firebase.storage.UploadTask;
 
+import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
 public class MainActivity extends AppCompatActivity {
 
     private Button uploadBtn;
@@ -27,6 +33,8 @@ public class MainActivity extends AppCompatActivity {
     private StorageReference mStorage;
 
     private ProgressDialog mProgress;
+
+    Uri picUri;
 
 
     @Override
@@ -44,45 +52,69 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
 
-                Intent intent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+                StrictMode.VmPolicy.Builder builder = new StrictMode.VmPolicy.Builder();
+                StrictMode.setVmPolicy(builder.build());
 
-                startActivityForResult(intent, CAMERA_REQUEST_CODE);
+                Intent i = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+
+                File file=getOutputMediaFile(1);
+                picUri = Uri.fromFile(file); // create
+                i.putExtra(MediaStore.EXTRA_OUTPUT,picUri);
+
+                startActivityForResult(i, CAMERA_REQUEST_CODE);
             }
         });
     }
+
+    /** Create a File for saving an image */
+    private  File getOutputMediaFile(int type){
+        File mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_PICTURES), "MyApplication");
+
+        /**Create the storage directory if it does not exist*/
+        if (! mediaStorageDir.exists()){
+            if (! mediaStorageDir.mkdirs()){
+                return null;
+            }
+        }
+
+        /**Create a media file name*/
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        File mediaFile;
+        if (type == 1){
+            mediaFile = new File(mediaStorageDir.getPath() + File.separator +
+                    "IMG_"+ timeStamp + ".png");
+        } else {
+            return null;
+        }
+
+        return mediaFile;
+    }
+
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-
-
         if(requestCode == CAMERA_REQUEST_CODE && resultCode == RESULT_OK){
+            mProgress.setMessage("Uploading Image ...");
+            mProgress.show();
 
-            //Bundle bundle = data.getExtras();
+            Uri uri = picUri;
 
-            try {
-                mProgress.setMessage("Uploading Image ...");
-                mProgress.show();
+            Log.d("uri", uri.toString());
 
-                Uri uri = data.getData();
+            StorageReference filepath = mStorage.child("Photos").child(uri.getLastPathSegment());
 
-                    Log.d("uri", uri.toString());
+            filepath.putFile(uri).addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
+                @Override
+                public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
 
-                StorageReference filepath = mStorage.child("Photos").child(uri.getLastPathSegment());
+                    mProgress.dismiss();
 
-                filepath.putFile(uri).addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
-                    @Override
-                    public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
-
-                        mProgress.dismiss();
-
-                        Toast.makeText(MainActivity.this, "Uploading Finshed ...", Toast.LENGTH_LONG).show();
-                    }
-                });
-            }catch (Exception e){
-                e.printStackTrace();
-            }
+                    Toast.makeText(MainActivity.this, "Uploading Finshed ...", Toast.LENGTH_LONG).show();
+                }
+            });
 
         }
     }
